@@ -19,7 +19,12 @@
   },
   "homepage": "https://github.com/maruware/wsagi#readme",
   "devDependencies": {
+    "@msgpack/msgpack": "^1.2.1",
+    "@types/bull": "^3.5.14",
+    "@types/eventemitter2": "^4.1.0",
     "@types/jest": "^24.0.13",
+    "@types/uuid": "^3.4.4",
+    "@types/ws": "^6.0.1",
     "@typescript-eslint/eslint-plugin": "^1.9.0",
     "eslint": "^5.16.0",
     "eslint-config-prettier": "^4.3.0",
@@ -33,5 +38,14 @@
     "prettier": "^1.17.1",
     "ts-jest": "^24.0.2",
     "typescript": "^3.4.5"
+  },
+  "dependencies": {
+    "@maruware/promise-tools": "^0.3.2",
+    "bull": "^3.9.1",
+    "eventemitter2": "^5.0.1",
+    "ioredis": "^4.9.5",
+    "uuid": "^3.3.2",
+    "winston": "^3.2.1",
+    "ws": "^7.0.0"
   }
 }
