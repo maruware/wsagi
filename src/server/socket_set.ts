@@ -2,39 +2,39 @@ import WebSocket from 'ws'
 import uuid from 'uuid/v4'
 import { logger } from '../logger'
 
-export class ClientManager {
-  clients: Map<string, WebSocket>
+export class SocketSet {
+  sockets: Map<string, WebSocket>
 
   constructor() {
-    this.clients = new Map<string, WebSocket>()
+    this.sockets = new Map<string, WebSocket>()
   }
 
   add(client: WebSocket) {
     const id = this.generateId()
-    this.clients.set(id, client)
+    this.sockets.set(id, client)
 
     return id
   }
 
   remove(id: string) {
-    this.clients.delete(id)
+    this.sockets.delete(id)
   }
 
   async send(id: string, data: WebSocket.Data) {
-    if (!this.clients.has(id)) {
+    if (!this.sockets.has(id)) {
       throw new Error('Bad ID')
     }
-    const client = this.clients.get(id)
+    const socket = this.sockets.get(id)
     return new Promise((resolve, reject) => {
       logger.debug(`ws send ${data}`)
-      client.send(data, err => {
+      socket.send(data, err => {
         err ? reject(err) : resolve()
       })
     })
   }
 
   allIds() {
-    return this.clients.keys()
+    return this.sockets.keys()
   }
 
   generateId() {

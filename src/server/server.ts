@@ -3,7 +3,7 @@ import { decodeMessage, Message, encodeMessage } from '../common/message'
 import { EventEmitter2, Listener } from 'eventemitter2'
 import Queue from 'bull'
 import uuid from 'uuid/v4'
-import { ClientManager } from './client_manager'
+import { SocketSet } from './socket_set'
 import { MessageManager } from './message_manager'
 import Redis from 'ioredis'
 import { logger } from '../logger'
@@ -28,7 +28,7 @@ interface SendingJob {
 export class WsagiServer {
   wss: WebSocket.Server
   eventHandler: EventEmitter2
-  clientManager: ClientManager
+  sockets: SocketSet
   queue: Queue.Queue<SendingJob>
   messageManager: MessageManager
 
@@ -38,7 +38,7 @@ export class WsagiServer {
   ) {
     this.wss = new WebSocket.Server(wsOptions)
     this.eventHandler = new EventEmitter2()
-    this.clientManager = new ClientManager()
+    this.sockets = new SocketSet()
     this.messageManager = new MessageManager(redisOptions)
 
     this.handleConnection = this.handleConnection.bind(this)
@@ -53,12 +53,12 @@ export class WsagiServer {
   }
 
   private handleConnection(ws: WebSocket) {
-    const id = this.clientManager.add(ws)
+    const id = this.sockets.add(ws)
     ws.on('message', message => {
       this.handleMessage(id, message)
     })
     ws.on('close', () => {
-      this.clientManager.remove(id)
+      this.sockets.remove(id)
     })
   }
 
@@ -98,7 +98,7 @@ export class WsagiServer {
   }
 
   broadcast(event: string, data: any) {
-    const idItr = this.clientManager.allIds()
+    const idItr = this.sockets.allIds()
 
     return mapIterateAll(idItr, async id => {
       await this.send(id, event, data)
@@ -123,7 +123,7 @@ export class WsagiServer {
         return Promise.resolve()
       }
 
-      await this.clientManager.send(
+      await this.sockets.send(
         job.data.clientId,
         encodeMessage(job.data.message)
       )
