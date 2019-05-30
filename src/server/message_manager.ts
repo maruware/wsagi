@@ -2,6 +2,8 @@ import Redis from 'ioredis'
 
 const WORKING = 'w'
 
+const KEY_BASE = 'wsagi::msg::'
+
 export class MessageManager {
   client: Redis.Redis
   constructor(redisOptions?: Redis.RedisOptions) {
@@ -33,7 +35,15 @@ export class MessageManager {
     this.client.disconnect()
   }
 
-  _genKey(id: string) {
-    return `wsagi::msg::${id}`
+  async remainingMessages() {
+    const pattern = `${KEY_BASE}*`
+    const keys = await this.client.keys(pattern)
+    return keys.map(key => {
+      return key.replace(KEY_BASE, '')
+    })
+  }
+
+  private _genKey(id: string) {
+    return `${KEY_BASE}${id}`
   }
 }

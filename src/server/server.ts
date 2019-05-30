@@ -109,6 +109,11 @@ export class WsagiServer extends EventEmitter2 {
     })
   }
 
+  async remainingSendCount() {
+    const msgs = await this.messageManager.remainingMessages()
+    return msgs.length
+  }
+
   private async processJob(job: Queue.Job<SendingJob>) {
     try {
       // check

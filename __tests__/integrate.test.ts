@@ -27,6 +27,9 @@ describe('integrate test', () => {
 
     expect(received.mock.calls.length).toBe(1)
 
+    const cnt = await server.remainingSendCount()
+    expect(cnt).toBe(0)
+
     await server.close()
   })
 })
