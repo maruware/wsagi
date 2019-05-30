@@ -1,6 +1,6 @@
 import WebSocket from 'ws'
 import { decodeMessage, Message, encodeMessage } from '../common/message'
-import { EventEmitter2, Listener } from 'eventemitter2'
+import { EventEmitter2 } from 'eventemitter2'
 import Queue from 'bull'
 import uuid from 'uuid/v4'
 import { SocketSet } from './socket_set'
@@ -25,9 +25,8 @@ interface SendingJob {
   message: Message
 }
 
-export class WsagiServer {
+export class WsagiServer extends EventEmitter2 {
   wss: WebSocket.Server
-  eventHandler: EventEmitter2
   sockets: SocketSet
   queue: Queue.Queue<SendingJob>
   messageManager: MessageManager
@@ -36,8 +35,8 @@ export class WsagiServer {
     wsOptions?: WebSocket.ServerOptions,
     redisOptions?: Redis.RedisOptions
   ) {
+    super()
     this.wss = new WebSocket.Server(wsOptions)
-    this.eventHandler = new EventEmitter2()
     this.sockets = new SocketSet()
     this.messageManager = new MessageManager(redisOptions)
 
@@ -76,11 +75,7 @@ export class WsagiServer {
   }
 
   private handleRequest(msg: Message) {
-    this.eventHandler.emit(msg.event, msg.data)
-  }
-
-  on(event: string, listener: Listener) {
-    this.eventHandler.on(event, listener)
+    this.emit(msg.event, msg.data)
   }
 
   async send(clientId: string, event: string, data: any) {
