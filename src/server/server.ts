@@ -25,17 +25,26 @@ interface SendingJob {
   message: Message
 }
 
+interface QueueOptions {
+  attempts: number
+  backoff: number | Queue.BackoffOptions
+}
+
 export class WsagiServer extends EventEmitter2 {
   wss: WebSocket.Server
   sockets: SocketSet
   queue: Queue.Queue<SendingJob>
   messageManager: MessageManager
+  queueOptions: QueueOptions
 
   constructor(
     wsOptions?: WebSocket.ServerOptions,
-    redisOptions?: Redis.RedisOptions
+    redisOptions?: Redis.RedisOptions,
+    queueOptions?: Partial<QueueOptions>
   ) {
     super()
+
+    // socket
     this.wss = new WebSocket.Server(wsOptions)
     this.sockets = new SocketSet()
     this.messageManager = new MessageManager(redisOptions)
@@ -43,12 +52,31 @@ export class WsagiServer extends EventEmitter2 {
     this.handleConnection = this.handleConnection.bind(this)
 
     this.wss.on('connection', this.handleConnection)
+
+    // queue
+    this.queueOptions = {
+      attempts:
+        queueOptions && queueOptions.attempts ? queueOptions.attempts : 5,
+      backoff: queueOptions && queueOptions.backoff ? queueOptions.backoff : 5
+    }
     this.queue = new Queue<SendingJob>('wsagi_sendings', {
       redis: redisOptions
     })
-
     this.processJob = this.processJob.bind(this)
     this.queue.process(this.processJob)
+
+    this.queue.on('error', err => logger.error('queue error: %s', err))
+    this.queue.on('failed', job => {
+      logger.debug(
+        `job[${job.data.message.id}] failed ${job.attemptsMade} times`
+      )
+      if (job.attemptsMade === job.opts.attempts) {
+        logger.error(`finally, failed job[${job.data.message.id}`)
+      }
+    })
+    this.queue.on('completed', (job, result) => {
+      logger.debug(`job completed ${job.data.message.id} ${result}`)
+    })
   }
 
   private handleConnection(ws: WebSocket) {
@@ -89,7 +117,8 @@ export class WsagiServer extends EventEmitter2 {
     }
     await this.messageManager.add(msgId)
 
-    return this.queue.add({ clientId, message: msg })
+    const { attempts, backoff } = this.queueOptions
+    return this.queue.add({ clientId, message: msg }, { attempts, backoff })
   }
 
   broadcast(event: string, data: any) {

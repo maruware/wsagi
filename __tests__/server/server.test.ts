@@ -27,7 +27,11 @@ describe('server test', () => {
   })
 
   it('messages should remain if client is dead', async () => {
-    const server = new WsagiServer({ port }, { host: process.env.REDIS_HOST })
+    const server = new WsagiServer(
+      { port },
+      { host: process.env.REDIS_HOST },
+      { attempts: 3, backoff: 10 }
+    )
 
     const event = 'event1'
 
@@ -46,10 +50,10 @@ describe('server test', () => {
     const data = { val: 1 }
     await server.broadcast(event, data)
 
-    await delay(100)
+    await delay(50)
 
     expect(receivedRes.mock.calls.length).toBe(1)
-    expect(receivedNoRes.mock.calls.length).toBe(1)
+    expect(receivedNoRes.mock.calls.length).toBeGreaterThan(1)
 
     const cnt = await server.remainingSendCount()
     expect(cnt).toBe(1)
