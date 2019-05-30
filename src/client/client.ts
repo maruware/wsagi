@@ -29,7 +29,7 @@ export class WsagiClient extends EventEmitter2 {
   private handleClose() {
     this.emit('close')
   }
-  private handleMessage(data: WebSocket.Data) {
+  protected handleMessage(data: WebSocket.Data) {
     const msg = decodeMessage(data)
     if (msg.isResponse) {
       // TODO: nop current
@@ -39,13 +39,13 @@ export class WsagiClient extends EventEmitter2 {
     }
   }
 
-  private handleRequest(msg: Message) {
+  protected handleRequest(msg: Message) {
     this.emit(msg.event, msg.data)
     // Response
     return this.responseRequest(msg)
   }
 
-  private responseRequest(msg: Message) {
+  protected responseRequest(msg: Message) {
     const res: Message = {
       isResponse: true,
       id: msg.id,
@@ -71,7 +71,7 @@ export class WsagiClient extends EventEmitter2 {
   private _send(msg: Message) {
     const d = encodeMessage(msg)
 
-    return new Promise((resolve, reject) => {
+    return new Promise<void>((resolve, reject) => {
       this.socket.send(d, err => {
         err ? reject(err) : resolve()
       })

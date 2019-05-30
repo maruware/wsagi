@@ -114,6 +114,10 @@ export class WsagiServer extends EventEmitter2 {
     return msgs.length
   }
 
+  clearRemainingSends() {
+    return this.messageManager.clear()
+  }
+
   private async processJob(job: Queue.Job<SendingJob>) {
     try {
       // check

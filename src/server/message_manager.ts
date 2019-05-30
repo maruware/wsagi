@@ -35,6 +35,13 @@ export class MessageManager {
     this.client.disconnect()
   }
 
+  async clear() {
+    const pattern = `${KEY_BASE}*`
+
+    const keys = await this.client.keys(pattern)
+    return this.client.del(...keys)
+  }
+
   async remainingMessages() {
     const pattern = `${KEY_BASE}*`
     const keys = await this.client.keys(pattern)
