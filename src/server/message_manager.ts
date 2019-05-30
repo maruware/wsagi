@@ -1,7 +1,6 @@
 import Redis from 'ioredis'
 
-const FALSE = 'f'
-const TRUE = 't'
+const WORKING = 'w'
 
 export class MessageManager {
   client: Redis.Redis
@@ -11,18 +10,18 @@ export class MessageManager {
 
   add(id: string) {
     const key = this._genKey(id)
-    return this.client.set(key, FALSE)
+    return this.client.set(key, WORKING)
   }
 
   async isDone(id: string) {
     const key = this._genKey(id)
     const val = await this.client.get(key)
-    return val === TRUE
+    return val === null
   }
 
   done(id: string) {
     const key = this._genKey(id)
-    return this.client.set(key, TRUE)
+    return this.client.del(key)
   }
 
   del(id: string) {
