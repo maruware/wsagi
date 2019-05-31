@@ -1,8 +1,17 @@
 import WebSocket from 'ws'
-import { decodeMessage, Message, encodeMessage } from '../common/message'
-import { EventEmitter2 } from 'eventemitter2'
+import {
+  decodeMessage,
+  Message,
+  encodeMessage,
+  MessageKind,
+  RequestMessage,
+  ListenEventMessage,
+  ResponseMessage
+} from '../common/message'
+import { EventEmitter2, Listener } from 'eventemitter2'
 import uuid from 'uuid/v4'
 import { defer, Deferred } from '@maruware/promise-tools'
+import { logger } from '../logger'
 
 export class WsagiClient extends EventEmitter2 {
   socket: WebSocket
@@ -31,41 +40,58 @@ export class WsagiClient extends EventEmitter2 {
   }
   protected handleMessage(data: WebSocket.Data) {
     const msg = decodeMessage(data)
-    if (msg.isResponse) {
-      // TODO: nop current
-      return Promise.resolve()
-    } else {
-      return this.handleRequest(msg)
+    switch (msg.kind) {
+      case MessageKind.Response:
+        // TODO: nop current
+        return Promise.resolve()
+      case MessageKind.Request:
+        return this.handleRequest(msg as RequestMessage)
+      default:
+        logger.error(`Unknown message kind ${msg.kind}`)
+        return Promise.resolve()
     }
   }
 
-  protected handleRequest(msg: Message) {
+  protected handleRequest(msg: RequestMessage) {
     this.emit(msg.event, msg.data)
     // Response
     return this.responseRequest(msg)
   }
 
-  protected responseRequest(msg: Message) {
-    const res: Message = {
-      isResponse: true,
-      id: msg.id,
+  protected responseRequest(msg: RequestMessage) {
+    const res: ResponseMessage = {
+      kind: MessageKind.Response,
+      reqId: msg.id,
       event: msg.event
     }
     return this._send(res)
   }
 
   public send(event: string, data: any) {
-    const msg: Message = {
-      event,
-      data,
+    const msg: RequestMessage = {
+      kind: MessageKind.Request,
       id: this.generateMessageId(),
-      isResponse: false
+      event,
+      data
     }
     return this._send(msg)
   }
 
   public waitReady() {
     return this.deferredReady.promise
+  }
+
+  public on(event: string, listener: Listener): this {
+    if (event !== 'open' && event !== 'close') {
+      const msg: ListenEventMessage = {
+        event,
+        kind: MessageKind.ListenEvent
+      }
+      logger.debug(`send listen event message [${event}]`)
+      this._send(msg)
+    }
+
+    return super.on(event, listener)
   }
 
   private _send(msg: Message) {

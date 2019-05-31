@@ -1,4 +1,4 @@
-import { Message } from '../../src/common/message'
+import { RequestMessage } from '../../src/common/message'
 import { WsagiClient } from '../../src/client'
 
 export class TesterClient extends WsagiClient {
@@ -8,7 +8,7 @@ export class TesterClient extends WsagiClient {
     this.respondable = respondable
   }
 
-  protected handleRequest(msg: Message) {
+  protected handleRequest(msg: RequestMessage) {
     this.emit(msg.event, msg.data)
     if (this.respondable) {
       // Response

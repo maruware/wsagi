@@ -47,6 +47,8 @@ describe('server test', () => {
     const receivedNoRes = jest.fn()
     noResClient.on(event, receivedNoRes)
 
+    await delay(10)
+
     const data = { val: 1 }
     await server.broadcast(event, data)
 

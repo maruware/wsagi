@@ -1,5 +1,12 @@
 import WebSocket from 'ws'
-import { decodeMessage, Message, encodeMessage } from '../common/message'
+import {
+  decodeMessage,
+  encodeMessage,
+  MessageKind,
+  RequestMessage,
+  ResponseMessage,
+  ListenEventMessage
+} from '../common/message'
 import { EventEmitter2 } from 'eventemitter2'
 import Queue from 'bull'
 import uuid from 'uuid/v4'
@@ -7,6 +14,7 @@ import { SocketSet } from './socket_set'
 import { MessageManager } from './message_manager'
 import Redis from 'ioredis'
 import { logger } from '../logger'
+import { ListenEventSet } from './listen_event_set'
 
 const mapIterateAll = <In, Out>(
   iterator: IterableIterator<In>,
@@ -22,7 +30,7 @@ const mapIterateAll = <In, Out>(
 
 interface SendingJob {
   clientId: string
-  message: Message
+  message: RequestMessage
 }
 
 interface QueueOptions {
@@ -33,6 +41,7 @@ interface QueueOptions {
 export class WsagiServer extends EventEmitter2 {
   wss: WebSocket.Server
   sockets: SocketSet
+  listenEventSet: ListenEventSet
   queue: Queue.Queue<SendingJob>
   messageManager: MessageManager
   queueOptions: QueueOptions
@@ -52,6 +61,8 @@ export class WsagiServer extends EventEmitter2 {
     this.handleConnection = this.handleConnection.bind(this)
 
     this.wss.on('connection', this.handleConnection)
+
+    this.listenEventSet = new ListenEventSet()
 
     // queue
     this.queueOptions = {
@@ -89,31 +100,42 @@ export class WsagiServer extends EventEmitter2 {
     })
   }
 
-  private handleMessage(clientId: string, message: WebSocket.Data) {
-    const msg = decodeMessage(message)
-    if (msg.isResponse) {
-      return this.handleResponse(msg)
-    } else {
-      return this.handleRequest(msg)
+  private handleMessage(clientId: string, data: WebSocket.Data) {
+    const msg = decodeMessage(data)
+    switch (msg.kind) {
+      case MessageKind.Response:
+        return this.handleResponse(msg as ResponseMessage)
+      case MessageKind.Request:
+        return this.handleRequest(msg as RequestMessage)
+      case MessageKind.ListenEvent:
+        return this.handleListenEvent(clientId, msg as ListenEventMessage)
+
+      default:
+        logger.error(`Unknown message kind ${msg.kind}`)
+        return Promise.resolve()
     }
   }
 
-  private handleResponse(msg: Message) {
-    return this.messageManager.done(msg.id)
+  private handleResponse(msg: ResponseMessage) {
+    return this.messageManager.done(msg.reqId)
   }
 
-  private handleRequest(msg: Message) {
+  private handleRequest(msg: RequestMessage) {
     this.emit(msg.event, msg.data)
+  }
+
+  private handleListenEvent(clientId: string, msg: ListenEventMessage) {
+    this.listenEventSet.add(clientId, msg.event)
   }
 
   async send(clientId: string, event: string, data: any) {
     logger.info(`send ${event} -> ${clientId}`)
     const msgId = this.generateMessageId()
-    const msg: Message = {
+    const msg: RequestMessage = {
+      kind: MessageKind.Request,
       id: msgId,
       event,
-      data,
-      isResponse: false
+      data
     }
     await this.messageManager.add(msgId)
 
@@ -125,7 +147,9 @@ export class WsagiServer extends EventEmitter2 {
     const idItr = this.sockets.allIds()
 
     return mapIterateAll(idItr, async id => {
-      await this.send(id, event, data)
+      if (this.listenEventSet.hasListenEvent(id, event)) {
+        await this.send(id, event, data)
+      }
     })
   }
 
