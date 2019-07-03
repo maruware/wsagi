@@ -9,7 +9,7 @@ import {
   ResponseMessage
 } from '../common/message'
 import { EventEmitter2, Listener } from 'eventemitter2'
-import uuid from 'uuid/v4'
+import { ulid } from 'ulid'
 import { defer, Deferred } from '@maruware/promise-tools'
 import { logger } from '../logger'
 
@@ -105,6 +105,6 @@ export class WsagiClient extends EventEmitter2 {
   }
 
   private generateMessageId() {
-    return uuid()
+    return ulid()
   }
 }

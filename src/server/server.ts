@@ -9,7 +9,7 @@ import {
 } from '../common/message'
 import { EventEmitter2 } from 'eventemitter2'
 import Queue from 'bull'
-import uuid from 'uuid/v4'
+import { ulid } from 'ulid'
 import { SocketSet } from './socket_set'
 import { MessageManager } from './message_manager'
 import Redis from 'ioredis'
@@ -217,6 +217,6 @@ export class WsagiServer extends EventEmitter2 {
   }
 
   private generateMessageId() {
-    return uuid()
+    return ulid()
   }
 }
