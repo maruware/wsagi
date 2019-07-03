@@ -57,6 +57,13 @@ export class WsagiServer extends EventEmitter2 {
     this.rooms = new RoomSet()
 
     // queue
+    this.initQueue(redisOptions, queueOptions)
+  }
+
+  private initQueue(
+    redisOptions: Redis.RedisOptions,
+    queueOptions: Partial<QueueOptions>
+  ) {
     this.queueOptions = {
       attempts:
         queueOptions && queueOptions.attempts ? queueOptions.attempts : 5,
@@ -65,6 +72,7 @@ export class WsagiServer extends EventEmitter2 {
     this.queue = new Queue<SendingJob>('wsagi_sendings', {
       redis: redisOptions
     })
+
     this.processJob = this.processJob.bind(this)
     this.queue.process(this.processJob)
 
