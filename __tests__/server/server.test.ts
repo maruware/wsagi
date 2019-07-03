@@ -61,8 +61,9 @@ describe('server test', () => {
     const cnt = await server.remainingSendCount()
     expect(cnt).toBe(1)
 
+    await resClient.close()
+    await noResClient.close()
     await server.clearRemainingSends()
-
     await server.close()
   })
 })
