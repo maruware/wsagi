@@ -9,11 +9,11 @@ export class TesterClient extends WsagiClient {
   }
 
   protected handleRequest(msg: RequestMessage) {
-    this.emit(msg.event, msg.data)
     if (this.respondable) {
       // Response
-      return this.responseRequest(msg)
+      return super.handleRequest(msg)
     } else {
+      this.emit(msg.event, msg.data)
       return Promise.resolve()
     }
   }

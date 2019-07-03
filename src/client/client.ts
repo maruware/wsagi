@@ -16,11 +16,14 @@ import { logger } from '../logger'
 export class WsagiClient extends EventEmitter2 {
   socket: WebSocket
   deferredReady: Deferred<void>
+  lastReceivedMessageId: string
 
   constructor(address: string) {
     super()
     this.socket = new WebSocket(address)
     this.deferredReady = defer<void>()
+
+    this.lastReceivedMessageId = ''
 
     this.handleOpen = this.handleOpen.bind(this)
     this.handleClose = this.handleClose.bind(this)
@@ -52,10 +55,18 @@ export class WsagiClient extends EventEmitter2 {
     }
   }
 
-  protected handleRequest(msg: RequestMessage) {
+  protected async handleRequest(msg: RequestMessage) {
+    if (
+      this.lastReceivedMessageId !== '' &&
+      this.lastReceivedMessageId >= msg.id
+    ) {
+      logger.info('no op because already received message')
+      return
+    }
     this.emit(msg.event, msg.data)
     // Response
-    return this.responseRequest(msg)
+    await this.responseRequest(msg)
+    this.lastReceivedMessageId = msg.id
   }
 
   protected responseRequest(msg: RequestMessage) {
