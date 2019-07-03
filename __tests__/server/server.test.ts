@@ -9,17 +9,20 @@ const port = 9999
 
 describe('server test', () => {
   it('start should work', async () => {
-    const server = new WsagiServer({ port }, { host: process.env.REDIS_HOST })
+    const server = new WsagiServer({
+      port,
+      redis: { host: process.env.REDIS_HOST }
+    })
 
     await server.close()
   })
 
   it('external http server', async () => {
     const server = http.createServer()
-    const wsServer = new WsagiServer(
-      { server },
-      { host: process.env.REDIS_HOST }
-    )
+    const wsServer = new WsagiServer({
+      server,
+      redis: { host: process.env.REDIS_HOST }
+    })
     server.listen(port)
 
     await wsServer.close()
@@ -27,11 +30,12 @@ describe('server test', () => {
   })
 
   it('messages should remain if client is dead', async () => {
-    const server = new WsagiServer(
-      { port },
-      { host: process.env.REDIS_HOST },
-      { attempts: 3, backoff: 10 }
-    )
+    const server = new WsagiServer({
+      port,
+      redis: { host: process.env.REDIS_HOST },
+      attempts: 3,
+      backoff: 10
+    })
     await server.clearRemainingSends()
 
     const event = 'event1'

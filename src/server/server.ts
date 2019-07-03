@@ -17,15 +17,28 @@ import { logger } from '../logger'
 import { ListenEventSet } from './listen_event_set'
 import { RoomSet } from './room_set'
 import { mapIterateAll } from '../utils'
+import http from 'http'
+import https from 'https'
+import _ from 'lodash'
 
 interface SendingJob {
   clientId: string
   message: RequestMessage
 }
 
-interface QueueOptions {
+interface QueueConfig {
   attempts: number
   backoff: number | Queue.BackoffOptions
+}
+
+interface WsagiServerOptions {
+  host?: string
+  port?: number
+  server?: http.Server | https.Server
+
+  redis?: Redis.RedisOptions
+  attempts?: number
+  backoff?: number | Queue.BackoffOptions
 }
 
 export class WsagiServer extends EventEmitter2 {
@@ -34,20 +47,16 @@ export class WsagiServer extends EventEmitter2 {
   listenEventSet: ListenEventSet
   queue: Queue.Queue<SendingJob>
   messageManager: MessageManager
-  queueOptions: QueueOptions
+  queueConfig: QueueConfig
   rooms: RoomSet
 
-  constructor(
-    wsOptions?: WebSocket.ServerOptions,
-    redisOptions?: Redis.RedisOptions,
-    queueOptions?: Partial<QueueOptions>
-  ) {
+  constructor(options: WsagiServerOptions) {
     super()
 
     // socket
-    this.wss = new WebSocket.Server(wsOptions)
+    this.wss = new WebSocket.Server(_.pick(options, ['host', 'port', 'server']))
     this.sockets = new SocketSet()
-    this.messageManager = new MessageManager(redisOptions)
+    this.messageManager = new MessageManager(options.redis)
 
     this.handleConnection = this.handleConnection.bind(this)
 
@@ -57,20 +66,16 @@ export class WsagiServer extends EventEmitter2 {
     this.rooms = new RoomSet()
 
     // queue
-    this.initQueue(redisOptions, queueOptions)
+    this.initQueue(options)
   }
 
-  private initQueue(
-    redisOptions: Redis.RedisOptions,
-    queueOptions: Partial<QueueOptions>
-  ) {
-    this.queueOptions = {
-      attempts:
-        queueOptions && queueOptions.attempts ? queueOptions.attempts : 5,
-      backoff: queueOptions && queueOptions.backoff ? queueOptions.backoff : 5
+  private initQueue(options: WsagiServerOptions) {
+    this.queueConfig = {
+      attempts: options && options.attempts ? options.attempts : 5,
+      backoff: options && options.backoff ? options.backoff : 5
     }
     this.queue = new Queue<SendingJob>('wsagi_sendings', {
-      redis: redisOptions
+      redis: options.redis
     })
 
     this.processJob = this.processJob.bind(this)
@@ -139,8 +144,7 @@ export class WsagiServer extends EventEmitter2 {
     }
     await this.messageManager.add(msgId)
 
-    const { attempts, backoff } = this.queueOptions
-    return this.queue.add({ clientId, message: msg }, { attempts, backoff })
+    return this.queue.add({ clientId, message: msg }, this.queueConfig)
   }
 
   broadcast(event: string, data: any) {
