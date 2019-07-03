@@ -39,9 +39,7 @@ export class WsagiClient extends EventEmitter2 {
     this.instance = new WebSocket(this.address)
 
     this.instance.on('open', this.handleOpen)
-    this.instance.on('close', (code: number, reason: string) =>
-      this.handleClose(code, reason)
-    )
+    this.instance.on('close', this.handleClose)
     this.instance.on('message', this.handleMessage)
   }
 
