@@ -14,13 +14,13 @@ import { defer, Deferred } from '@maruware/promise-tools'
 import { logger } from '../logger'
 
 export class WsagiClient extends EventEmitter2 {
-  socket: WebSocket
+  instance: WebSocket
   deferredReady: Deferred<void>
   lastReceivedMessageId: string
 
   constructor(address: string) {
     super()
-    this.socket = new WebSocket(address)
+    this.instance = new WebSocket(address)
     this.deferredReady = defer<void>()
 
     this.lastReceivedMessageId = ''
@@ -29,9 +29,9 @@ export class WsagiClient extends EventEmitter2 {
     this.handleClose = this.handleClose.bind(this)
     this.handleMessage = this.handleMessage.bind(this)
 
-    this.socket.on('open', this.handleOpen)
-    this.socket.on('close', this.handleClose)
-    this.socket.on('message', this.handleMessage)
+    this.instance.on('open', this.handleOpen)
+    this.instance.on('close', this.handleClose)
+    this.instance.on('message', this.handleMessage)
   }
 
   private handleOpen() {
@@ -109,7 +109,7 @@ export class WsagiClient extends EventEmitter2 {
     const d = encodeMessage(msg)
 
     return new Promise<void>((resolve, reject) => {
-      this.socket.send(d, err => {
+      this.instance.send(d, err => {
         err ? reject(err) : resolve()
       })
     })
