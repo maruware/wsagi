@@ -32,6 +32,7 @@ describe('server test', () => {
       { host: process.env.REDIS_HOST },
       { attempts: 3, backoff: 10 }
     )
+    await server.clearRemainingSends()
 
     const event = 'event1'
 

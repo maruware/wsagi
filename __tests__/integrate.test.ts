@@ -8,6 +8,7 @@ describe('integrate test', () => {
   it('server -> client', async () => {
     const port = 9998
     const server = new WsagiServer({ port }, { host: process.env.REDIS_HOST })
+    await server.clearRemainingSends()
 
     const client = new WsagiClient(`ws://localhost:${port}/`)
     const connected = jest.fn()

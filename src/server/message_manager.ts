@@ -39,7 +39,10 @@ export class MessageManager {
     const pattern = `${KEY_BASE}*`
 
     const keys = await this.client.keys(pattern)
-    return this.client.del(...keys)
+    if (keys.length > 0) {
+      return this.client.del(...keys)
+    }
+    return false
   }
 
   async remainingMessages() {
