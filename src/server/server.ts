@@ -15,6 +15,7 @@ import { MessageManager } from './message_manager'
 import Redis from 'ioredis'
 import { logger } from '../logger'
 import { ListenEventSet } from './listen_event_set'
+import { RoomSet } from './room_set'
 
 const mapIterateAll = <In, Out>(
   iterator: IterableIterator<In>,
@@ -45,6 +46,7 @@ export class WsagiServer extends EventEmitter2 {
   queue: Queue.Queue<SendingJob>
   messageManager: MessageManager
   queueOptions: QueueOptions
+  rooms: RoomSet
 
   constructor(
     wsOptions?: WebSocket.ServerOptions,
@@ -63,6 +65,7 @@ export class WsagiServer extends EventEmitter2 {
     this.wss.on('connection', this.handleConnection)
 
     this.listenEventSet = new ListenEventSet()
+    this.rooms = new RoomSet()
 
     // queue
     this.queueOptions = {
@@ -153,6 +156,19 @@ export class WsagiServer extends EventEmitter2 {
     })
   }
 
+  sendRoom(roomName: string, event: string, data: any) {
+    const itr = this.rooms.getRoomMembers(roomName)
+    if (!itr) {
+      logger.warn(`No existing room ${roomName}`)
+      return Promise.resolve()
+    }
+    return mapIterateAll(itr, async id => {
+      if (this.listenEventSet.hasListenEvent(id, event)) {
+        await this.send(id, event, data)
+      }
+    })
+  }
+
   async close(): Promise<void> {
     await this.queue.close()
     this.messageManager.close()
@@ -169,6 +185,14 @@ export class WsagiServer extends EventEmitter2 {
 
   clearRemainingSends() {
     return this.messageManager.clear()
+  }
+
+  join(id: string, roomName: string) {
+    this.rooms.joinRoom(id, roomName)
+  }
+
+  getAllClientIds() {
+    return this.sockets.allIds()
   }
 
   private async processJob(job: Queue.Job<SendingJob>) {

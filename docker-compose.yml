@@ -2,7 +2,7 @@ version: '3.7'
 services:
   app:
     build: .
-    command: yarn start
+    command: sleep infinity
     init: true
     ports:
       - "3000:3000"
