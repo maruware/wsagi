@@ -1,10 +1,10 @@
 /* eslint-env jest */
 
-import { MessageManager } from '../../src/server/message_manager'
+import { MessageStorage } from '../../src/server/message_storage'
 
 describe('message manager test', () => {
   it('simple scenario', async () => {
-    const m = new MessageManager({ host: process.env.REDIS_HOST })
+    const m = new MessageStorage({ host: process.env.REDIS_HOST })
     const id1 = 'a'
     await m.add(id1)
 

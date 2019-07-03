@@ -36,7 +36,7 @@ describe('server test', () => {
       attempts: 3,
       backoff: 10
     })
-    await server.clearRemainingSends()
+    await server.clearRemainingSendings()
 
     const event = 'event1'
 
@@ -62,12 +62,12 @@ describe('server test', () => {
     expect(receivedRes.mock.calls.length).toBe(1)
     expect(receivedNoRes.mock.calls.length).toBeGreaterThan(1)
 
-    const cnt = await server.remainingSendCount()
+    const cnt = await server.remainingSendingCount()
     expect(cnt).toBe(1)
 
     await resClient.close()
     await noResClient.close()
-    await server.clearRemainingSends()
+    await server.clearRemainingSendings()
     await server.close()
   })
 })

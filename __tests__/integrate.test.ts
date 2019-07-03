@@ -11,7 +11,7 @@ describe('integrate test', () => {
       port,
       redis: { host: process.env.REDIS_HOST }
     })
-    await server.clearRemainingSends()
+    await server.clearRemainingSendings()
 
     const client = new WsagiClient(`ws://localhost:${port}/`)
     const connected = jest.fn()
@@ -62,7 +62,7 @@ describe('integrate test', () => {
     expect(received.mock.calls.length).toBe(3)
     expect(received.mock.calls[2][0]).toEqual(data)
 
-    const cnt = await server.remainingSendCount()
+    const cnt = await server.remainingSendingCount()
     expect(cnt).toBe(0)
 
     await client.close()

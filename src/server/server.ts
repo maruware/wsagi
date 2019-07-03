@@ -8,10 +8,7 @@ import {
   ListenEventMessage
 } from '../common/message'
 import { EventEmitter2 } from 'eventemitter2'
-import Queue from 'bull'
-import { ulid } from 'ulid'
 import { SocketSet } from './socket_set'
-import { MessageManager } from './message_manager'
 import Redis from 'ioredis'
 import { logger } from '../logger'
 import { ListenEventSet } from './listen_event_set'
@@ -20,16 +17,7 @@ import { mapIterateAll } from '../utils'
 import http from 'http'
 import https from 'https'
 import _ from 'lodash'
-
-interface SendingJob {
-  clientId: string
-  message: RequestMessage
-}
-
-interface QueueConfig {
-  attempts: number
-  backoff: number | Queue.BackoffOptions
-}
+import { BackoffOptions, MessageManager } from './message_manager'
 
 interface WsagiServerOptions {
   host?: string
@@ -38,16 +26,14 @@ interface WsagiServerOptions {
 
   redis?: Redis.RedisOptions
   attempts?: number
-  backoff?: number | Queue.BackoffOptions
+  backoff?: number | BackoffOptions
 }
 
 export class WsagiServer extends EventEmitter2 {
   wss: WebSocket.Server
   sockets: SocketSet
   listenEventSet: ListenEventSet
-  queue: Queue.Queue<SendingJob>
   messageManager: MessageManager
-  queueConfig: QueueConfig
   rooms: RoomSet
 
   constructor(options: WsagiServerOptions) {
@@ -56,7 +42,12 @@ export class WsagiServer extends EventEmitter2 {
     // socket
     this.wss = new WebSocket.Server(_.pick(options, ['host', 'port', 'server']))
     this.sockets = new SocketSet()
-    this.messageManager = new MessageManager(options.redis)
+
+    this.sendProc = this.sendProc.bind(this)
+    this.messageManager = new MessageManager(
+      this.sendProc,
+      _.pick(options, ['attempts', 'backoff', 'redis'])
+    )
 
     this.handleConnection = this.handleConnection.bind(this)
 
@@ -64,35 +55,6 @@ export class WsagiServer extends EventEmitter2 {
 
     this.listenEventSet = new ListenEventSet()
     this.rooms = new RoomSet()
-
-    // queue
-    this.initQueue(options)
-  }
-
-  private initQueue(options: WsagiServerOptions) {
-    this.queueConfig = {
-      attempts: options && options.attempts ? options.attempts : 5,
-      backoff: options && options.backoff ? options.backoff : 5
-    }
-    this.queue = new Queue<SendingJob>('wsagi_sendings', {
-      redis: options.redis
-    })
-
-    this.processJob = this.processJob.bind(this)
-    this.queue.process(this.processJob)
-
-    this.queue.on('error', err => logger.error('queue error: %s', err))
-    this.queue.on('failed', job => {
-      logger.debug(
-        `job[${job.data.message.id}] failed ${job.attemptsMade} times`
-      )
-      if (job.attemptsMade === job.opts.attempts) {
-        logger.error(`finally, failed job[${job.data.message.id}`)
-      }
-    })
-    this.queue.on('completed', (job, result) => {
-      logger.debug(`job completed ${job.data.message.id} ${result}`)
-    })
   }
 
   private handleConnection(ws: WebSocket) {
@@ -122,7 +84,7 @@ export class WsagiServer extends EventEmitter2 {
   }
 
   private handleResponse(msg: ResponseMessage) {
-    return this.messageManager.done(msg.reqId)
+    return this.messageManager.acknowledged(msg.reqId)
   }
 
   private handleRequest(msg: RequestMessage) {
@@ -135,16 +97,8 @@ export class WsagiServer extends EventEmitter2 {
 
   async send(clientId: string, event: string, data: any) {
     logger.info(`send ${event} -> ${clientId}`)
-    const msgId = this.generateMessageId()
-    const msg: RequestMessage = {
-      kind: MessageKind.Request,
-      id: msgId,
-      event,
-      data
-    }
-    await this.messageManager.add(msgId)
 
-    return this.queue.add({ clientId, message: msg }, this.queueConfig)
+    await this.messageManager.registMessage(clientId, event, data)
   }
 
   broadcast(event: string, data: any) {
@@ -171,20 +125,19 @@ export class WsagiServer extends EventEmitter2 {
   }
 
   async close(): Promise<void> {
-    await this.queue.close()
-    this.messageManager.close()
+    await this.messageManager.close()
 
     await new Promise((resolve, reject) => {
       this.wss.close(err => (err ? reject(err) : resolve()))
     })
   }
 
-  async remainingSendCount() {
+  async remainingSendingCount() {
     const msgs = await this.messageManager.remainingMessages()
     return msgs.length
   }
 
-  clearRemainingSends() {
+  clearRemainingSendings() {
     return this.messageManager.clear()
   }
 
@@ -196,28 +149,13 @@ export class WsagiServer extends EventEmitter2 {
     return this.sockets.allIds()
   }
 
-  private async processJob(job: Queue.Job<SendingJob>) {
-    try {
-      // check
-      const isDone = await this.messageManager.isDone(job.data.message.id)
-
-      if (isDone) {
-        return Promise.resolve()
-      }
-
-      await this.sockets.send(
-        job.data.clientId,
-        encodeMessage(job.data.message)
-      )
-
-      return Promise.reject(new Error('not yet received message'))
-    } catch (e) {
-      logger.error(e)
-      return Promise.reject(e)
+  private sendProc(msgId: string, clientId: string, event: string, data: any) {
+    const msg: RequestMessage = {
+      kind: MessageKind.Request,
+      id: msgId,
+      event,
+      data
     }
-  }
-
-  private generateMessageId() {
-    return ulid()
+    return this.sockets.send(clientId, encodeMessage(msg))
   }
 }
