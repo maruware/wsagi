@@ -14,14 +14,16 @@ import { defer, Deferred } from '@maruware/promise-tools'
 import { logger } from '../logger'
 
 export class WsagiClient extends EventEmitter2 {
-  socket: WebSocket
+  address: string
+  instance: WebSocket
+  autoReconnectInterval: number
   deferredReady: Deferred<void>
   lastReceivedMessageId: string
 
-  constructor(address: string) {
+  constructor(address: string, autoReconnectInterval: number = 5000) {
     super()
-    this.socket = new WebSocket(address)
-    this.deferredReady = defer<void>()
+    this.address = address
+    this.autoReconnectInterval = autoReconnectInterval
 
     this.lastReceivedMessageId = ''
 
@@ -29,16 +31,38 @@ export class WsagiClient extends EventEmitter2 {
     this.handleClose = this.handleClose.bind(this)
     this.handleMessage = this.handleMessage.bind(this)
 
-    this.socket.on('open', this.handleOpen)
-    this.socket.on('close', this.handleClose)
-    this.socket.on('message', this.handleMessage)
+    this.open()
+  }
+
+  private open() {
+    this.deferredReady = defer<void>()
+    this.instance = new WebSocket(this.address)
+
+    this.instance.on('open', this.handleOpen)
+    this.instance.on('close', (code: number, reason: string) =>
+      this.handleClose(code, reason)
+    )
+    this.instance.on('message', this.handleMessage)
+  }
+
+  public close() {
+    this.instance.close()
   }
 
   private handleOpen() {
     this.deferredReady.resolve()
     this.emit('open')
   }
-  private handleClose() {
+  private handleClose(code: number, reason: string) {
+    logger.debug('handle close: code = %d, reason = %s', code, reason)
+
+    switch (code) {
+      case 1005:
+        logger.info('socket closed')
+        break
+      default:
+        this.reconnect()
+    }
     this.emit('close')
   }
   protected handleMessage(data: WebSocket.Data) {
@@ -50,7 +74,7 @@ export class WsagiClient extends EventEmitter2 {
       case MessageKind.Request:
         return this.handleRequest(msg as RequestMessage)
       default:
-        logger.error(`Unknown message kind ${msg.kind}`)
+        logger.error('Unknown message kind : %s', msg.kind)
         return Promise.resolve()
     }
   }
@@ -98,18 +122,26 @@ export class WsagiClient extends EventEmitter2 {
         event,
         kind: MessageKind.ListenEvent
       }
-      logger.debug(`send listen event message [${event}]`)
+      logger.debug('send listen event message [%s]', event)
       this._send(msg)
     }
 
     return super.on(event, listener)
   }
 
+  private reconnect() {
+    this.instance.removeAllListeners()
+    setTimeout(() => {
+      logger.info('reconnecting...')
+      this.open()
+    }, this.autoReconnectInterval)
+  }
+
   private _send(msg: Message) {
     const d = encodeMessage(msg)
 
     return new Promise<void>((resolve, reject) => {
-      this.socket.send(d, err => {
+      this.instance.send(d, err => {
         err ? reject(err) : resolve()
       })
     })

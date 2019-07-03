@@ -62,6 +62,28 @@ describe('integrate test', () => {
     const cnt = await server.remainingSendCount()
     expect(cnt).toBe(0)
 
+    await client.close()
+    await server.close()
+  })
+
+  it('reconnect', async () => {
+    const port = 9998
+    let server = new WsagiServer({ port }, { host: process.env.REDIS_HOST })
+
+    const client = new WsagiClient(`ws://localhost:${port}/`, 5)
+    const connected = jest.fn()
+    client.on('open', connected)
+
+    // dead server
+    await server.close()
+    // reboot
+    server = new WsagiServer({ port }, { host: process.env.REDIS_HOST })
+
+    await delay(10)
+
+    expect(connected.mock.calls).toHaveLength(2)
+
+    await client.close()
     await server.close()
   })
 })
