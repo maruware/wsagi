@@ -96,7 +96,7 @@ export class WsagiServer extends EventEmitter2 {
   }
 
   async send(clientId: string, event: string, data: any) {
-    logger.info(`send ${event} -> ${clientId}`)
+    logger.info(`send(queuing) ${event} -> ${clientId}`)
 
     await this.messageManager.registMessage(clientId, event, data)
   }
@@ -156,6 +156,8 @@ export class WsagiServer extends EventEmitter2 {
       event,
       data
     }
+    logger.info(`send(actually) ${event} -> ${clientId}`)
+
     return this.sockets.send(clientId, encodeMessage(msg))
   }
 }
