@@ -41,6 +41,8 @@ export class WsagiClient extends EventEmitter2 {
     this.instance.on('open', this.handleOpen)
     this.instance.on('close', this.handleClose)
     this.instance.on('message', this.handleMessage)
+
+    logger.debug('opened')
   }
 
   public close() {
@@ -115,7 +117,7 @@ export class WsagiClient extends EventEmitter2 {
   }
 
   public on(event: string, listener: Listener): this {
-    if (event !== 'open' && event !== 'close') {
+    if (!['open', 'close', 'reconnect'].includes(event)) {
       const msg: ListenEventMessage = {
         event,
         kind: MessageKind.ListenEvent
@@ -131,7 +133,13 @@ export class WsagiClient extends EventEmitter2 {
     this.instance.removeAllListeners()
     setTimeout(() => {
       logger.info('reconnecting...')
-      this.open()
+      try {
+        this.open()
+        this.emit('reconnect')
+      } catch (e) {
+        logger.error('failed to reconnect %s', e)
+        this.reconnect()
+      }
     }, this.autoReconnectInterval)
   }
 
