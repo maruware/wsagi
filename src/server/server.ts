@@ -8,7 +8,7 @@ import {
   ListenEventMessage
 } from '../common/message'
 import { EventEmitter2 } from 'eventemitter2'
-import { SocketSet } from './socket_set'
+import { ConnectionStore } from './connection_store'
 import Redis from 'ioredis'
 import { logger } from '../logger'
 import { ListenEventSet } from './listen_event_set'
@@ -31,7 +31,7 @@ interface WsagiServerOptions {
 
 export class WsagiServer extends EventEmitter2 {
   instance: WebSocket.Server
-  sockets: SocketSet
+  connStore: ConnectionStore
   listenEventSet: ListenEventSet
   messageManager: MessageManager
   rooms: RoomSet
@@ -43,7 +43,7 @@ export class WsagiServer extends EventEmitter2 {
     this.instance = new WebSocket.Server(
       _.pick(options, ['host', 'port', 'server'])
     )
-    this.sockets = new SocketSet()
+    this.connStore = new ConnectionStore(options.redis)
 
     this.sendProc = this.sendProc.bind(this)
     this.messageManager = new MessageManager(
@@ -60,12 +60,12 @@ export class WsagiServer extends EventEmitter2 {
   }
 
   private handleConnection(ws: WebSocket) {
-    const id = this.sockets.add(ws)
+    const id = this.connStore.add(ws)
     ws.on('message', message => {
       this.handleMessage(id, message)
     })
     ws.on('close', () => {
-      this.sockets.remove(id)
+      this.connStore.remove(id)
     })
   }
 
@@ -104,7 +104,7 @@ export class WsagiServer extends EventEmitter2 {
   }
 
   broadcast(event: string, data: any) {
-    const idItr = this.sockets.allIds()
+    const idItr = this.connStore.allIds()
 
     return mapIterateAll(idItr, async id => {
       if (this.listenEventSet.hasListenEvent(id, event)) {
@@ -129,6 +129,7 @@ export class WsagiServer extends EventEmitter2 {
   async close(): Promise<void> {
     await this.messageManager.close()
     await this.rooms.close()
+    this.connStore.close()
     await new Promise((resolve, reject) => {
       this.instance.close(err => (err ? reject(err) : resolve()))
     })
@@ -148,7 +149,7 @@ export class WsagiServer extends EventEmitter2 {
   }
 
   getAllClientIds() {
-    return this.sockets.allIds()
+    return this.connStore.allIds()
   }
 
   private sendProc(msgId: string, clientId: string, event: string, data: any) {
@@ -160,6 +161,6 @@ export class WsagiServer extends EventEmitter2 {
     }
     logger.info(`send(actually) ${event} -> ${clientId}`)
 
-    return this.sockets.send(clientId, encodeMessage(msg))
+    return this.connStore.send(clientId, encodeMessage(msg))
   }
 }
