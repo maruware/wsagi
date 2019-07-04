@@ -30,7 +30,7 @@ interface WsagiServerOptions {
 }
 
 export class WsagiServer extends EventEmitter2 {
-  wss: WebSocket.Server
+  instance: WebSocket.Server
   sockets: SocketSet
   listenEventSet: ListenEventSet
   messageManager: MessageManager
@@ -40,7 +40,9 @@ export class WsagiServer extends EventEmitter2 {
     super()
 
     // socket
-    this.wss = new WebSocket.Server(_.pick(options, ['host', 'port', 'server']))
+    this.instance = new WebSocket.Server(
+      _.pick(options, ['host', 'port', 'server'])
+    )
     this.sockets = new SocketSet()
 
     this.sendProc = this.sendProc.bind(this)
@@ -51,7 +53,7 @@ export class WsagiServer extends EventEmitter2 {
 
     this.handleConnection = this.handleConnection.bind(this)
 
-    this.wss.on('connection', this.handleConnection)
+    this.instance.on('connection', this.handleConnection)
 
     this.listenEventSet = new ListenEventSet()
     this.rooms = new RoomSet(options.redis)
@@ -128,7 +130,7 @@ export class WsagiServer extends EventEmitter2 {
     await this.messageManager.close()
     await this.rooms.close()
     await new Promise((resolve, reject) => {
-      this.wss.close(err => (err ? reject(err) : resolve()))
+      this.instance.close(err => (err ? reject(err) : resolve()))
     })
   }
 
