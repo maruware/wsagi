@@ -11,13 +11,13 @@ import { EventEmitter2 } from 'eventemitter2'
 import { ConnectionStore } from './connection_store'
 import Redis from 'ioredis'
 import { logger } from '../logger'
-import { ListenEventSet } from './listen_event_set'
+import { ListenEventStore } from './listen_event_set'
 import { RoomStore } from './room_store'
-import { mapIterateAll } from '../utils'
 import http from 'http'
 import https from 'https'
 import _ from 'lodash'
 import { BackoffOptions, MessageManager } from './message_manager'
+import { all } from '@maruware/promise-tools'
 
 interface WsagiServerOptions {
   host?: string
@@ -32,7 +32,7 @@ interface WsagiServerOptions {
 export class WsagiServer extends EventEmitter2 {
   instance: WebSocket.Server
   connStore: ConnectionStore
-  listenEventSet: ListenEventSet
+  listenEventStore: ListenEventStore
   messageManager: MessageManager
   roomStore: RoomStore
 
@@ -55,7 +55,7 @@ export class WsagiServer extends EventEmitter2 {
 
     this.instance.on('connection', this.handleConnection)
 
-    this.listenEventSet = new ListenEventSet()
+    this.listenEventStore = new ListenEventStore(options.redis)
     this.roomStore = new RoomStore(options.redis)
   }
 
@@ -64,9 +64,13 @@ export class WsagiServer extends EventEmitter2 {
     ws.on('message', message => {
       this.handleMessage(id, message)
     })
-    ws.on('close', () => {
+    ws.on('close', async () => {
       this.connStore.remove(id)
+      await this.roomStore.leaveAllRooms(id)
+      await this.listenEventStore.removeAll(id)
     })
+
+    this.emit('connection', id)
   }
 
   private handleMessage(clientId: string, data: WebSocket.Data) {
@@ -94,7 +98,7 @@ export class WsagiServer extends EventEmitter2 {
   }
 
   private handleListenEvent(clientId: string, msg: ListenEventMessage) {
-    this.listenEventSet.add(clientId, msg.event)
+    this.listenEventStore.add(clientId, msg.event)
   }
 
   async send(clientId: string, event: string, data: any) {
@@ -103,36 +107,40 @@ export class WsagiServer extends EventEmitter2 {
     await this.messageManager.registMessage(clientId, event, data)
   }
 
-  broadcast(event: string, data: any) {
-    const idItr = this.connStore.allIds()
+  async broadcast(event: string, data: any) {
+    const ids = await this.connStore.allIds()
 
-    return mapIterateAll(idItr, async id => {
-      if (this.listenEventSet.hasListenEvent(id, event)) {
-        await this.send(id, event, data)
-      }
-    })
+    return Promise.all(
+      ids.map(async id => {
+        const isListen = await this.listenEventStore.hasListenEvent(id, event)
+        if (isListen) {
+          await this.send(id, event, data)
+        }
+      })
+    )
   }
 
   async sendRoom(roomName: string, event: string, data: any) {
     const members = await this.roomStore.getRoomMembers(roomName)
 
     return Promise.all(
-      members.map(m => {
-        if (this.listenEventSet.hasListenEvent(m, event)) {
-          return this.send(m, event, data)
+      members.map(async m => {
+        const isListen = await this.listenEventStore.hasListenEvent(m, event)
+        if (isListen) {
+          await this.send(m, event, data)
         }
-        return Promise.resolve()
       })
     )
   }
 
   async close(): Promise<void> {
-    await this.messageManager.close()
-    await this.roomStore.close()
-    this.connStore.close()
     await new Promise((resolve, reject) => {
       this.instance.close(err => (err ? reject(err) : resolve()))
     })
+    await this.messageManager.close()
+    this.listenEventStore.close()
+    await this.roomStore.close()
+    this.connStore.close()
   }
 
   async remainingSendingCount() {
@@ -142,6 +150,15 @@ export class WsagiServer extends EventEmitter2 {
 
   clearRemainingSendings() {
     return this.messageManager.clear()
+  }
+
+  clearAll() {
+    return all(
+      this.listenEventStore.clear(),
+      this.connStore.clear(),
+      this.roomStore.clear(),
+      this.messageManager.clear()
+    )
   }
 
   join(id: string, roomName: string) {

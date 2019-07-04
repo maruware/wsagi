@@ -11,7 +11,7 @@ describe('integrate test', () => {
       port,
       redis: { host: process.env.REDIS_HOST }
     })
-    await server.clearRemainingSendings()
+    await server.clearAll()
 
     const client = new WsagiClient(`ws://localhost:${port}/`)
     const connected = jest.fn()
@@ -33,9 +33,10 @@ describe('integrate test', () => {
     await delay(10)
 
     // send one
-    const id = server.getAllClientIds().next().value
+    const ids = await server.getAllClientIds()
+    const id = ids[0]
     let data = { val: 1 }
-    server.send(id, event1, data)
+    await server.send(id, event1, data)
 
     await delay(100)
     expect(received.mock.calls.length).toBe(1)
@@ -66,32 +67,80 @@ describe('integrate test', () => {
     expect(cnt).toBe(0)
 
     await client.close()
+    await delay(10)
+
     await server.close()
   })
 
   it('reconnect', async () => {
-    const port = 9998
+    const port = 9995
     let server = new WsagiServer({
       port,
       redis: { host: process.env.REDIS_HOST }
     })
-    const client = new WsagiClient(`ws://localhost:${port}/`, 5)
+    await server.clearAll()
+
+    const client = new WsagiClient(`ws://localhost:${port}/`, 20)
     const connected = jest.fn()
     client.on('open', connected)
+    const reconnected = jest.fn()
+    client.on('reconnect', reconnected)
+
+    await client.waitReady()
 
     // dead server
     await server.close()
+    await delay(10)
+
     // reboot
     server = new WsagiServer({
       port,
       redis: { host: process.env.REDIS_HOST }
     })
 
-    await delay(10)
+    await delay(20)
 
     expect(connected.mock.calls).toHaveLength(2)
+    expect(reconnected.mock.calls).toHaveLength(1)
 
     await client.close()
+    await delay(10)
+
     await server.close()
+  })
+
+  it('multi instances', async () => {
+    const port1 = 9997
+    const server1 = new WsagiServer({
+      port: port1,
+      redis: { host: process.env.REDIS_HOST }
+    })
+    await server1.clearAll()
+
+    const port2 = 9998
+    const server2 = new WsagiServer({
+      port: port2,
+      redis: { host: process.env.REDIS_HOST }
+    })
+
+    const client = new WsagiClient(`ws://localhost:${port1}/`)
+    await client.waitReady()
+
+    const event = 'test'
+    const received = jest.fn()
+    client.on(event, received)
+
+    const data = { val: 1 }
+    await server2.broadcast(event, data)
+
+    await delay(100)
+
+    expect(received.mock.calls.length).toBe(1)
+
+    client.close()
+
+    await delay(10)
+    await server1.close()
+    await server2.close()
   })
 })

@@ -37,6 +37,7 @@ describe('server test', () => {
       backoff: 10
     })
     await server.clearRemainingSendings()
+    await server.clearAll()
 
     const event = 'event1'
 
