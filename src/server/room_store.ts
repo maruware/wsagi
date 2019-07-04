@@ -2,7 +2,7 @@ import Redis from 'ioredis'
 
 const KEY_BASE = 'wsagi::room::'
 
-export class RoomSet {
+export class RoomStore {
   redis: Redis.Redis
 
   constructor(options?: Redis.RedisOptions) {

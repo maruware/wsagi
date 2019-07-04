@@ -12,7 +12,7 @@ import { ConnectionStore } from './connection_store'
 import Redis from 'ioredis'
 import { logger } from '../logger'
 import { ListenEventSet } from './listen_event_set'
-import { RoomSet } from './room_set'
+import { RoomStore } from './room_store'
 import { mapIterateAll } from '../utils'
 import http from 'http'
 import https from 'https'
@@ -34,7 +34,7 @@ export class WsagiServer extends EventEmitter2 {
   connStore: ConnectionStore
   listenEventSet: ListenEventSet
   messageManager: MessageManager
-  rooms: RoomSet
+  roomStore: RoomStore
 
   constructor(options: WsagiServerOptions) {
     super()
@@ -56,7 +56,7 @@ export class WsagiServer extends EventEmitter2 {
     this.instance.on('connection', this.handleConnection)
 
     this.listenEventSet = new ListenEventSet()
-    this.rooms = new RoomSet(options.redis)
+    this.roomStore = new RoomStore(options.redis)
   }
 
   private handleConnection(ws: WebSocket) {
@@ -114,7 +114,7 @@ export class WsagiServer extends EventEmitter2 {
   }
 
   async sendRoom(roomName: string, event: string, data: any) {
-    const members = await this.rooms.getRoomMembers(roomName)
+    const members = await this.roomStore.getRoomMembers(roomName)
 
     return Promise.all(
       members.map(m => {
@@ -128,7 +128,7 @@ export class WsagiServer extends EventEmitter2 {
 
   async close(): Promise<void> {
     await this.messageManager.close()
-    await this.rooms.close()
+    await this.roomStore.close()
     this.connStore.close()
     await new Promise((resolve, reject) => {
       this.instance.close(err => (err ? reject(err) : resolve()))
@@ -145,7 +145,7 @@ export class WsagiServer extends EventEmitter2 {
   }
 
   join(id: string, roomName: string) {
-    this.rooms.joinRoom(id, roomName)
+    this.roomStore.joinRoom(id, roomName)
   }
 
   getAllClientIds() {

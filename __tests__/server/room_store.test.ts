@@ -1,10 +1,10 @@
 /* eslint-env jest */
 
-import { RoomSet } from '../../src/server/room_set'
+import { RoomStore } from '../../src/server/room_store'
 
 describe('room test', () => {
   it('simple scenario', async () => {
-    const roomSet = new RoomSet({ host: process.env.REDIS_HOST })
+    const roomSet = new RoomStore({ host: process.env.REDIS_HOST })
     const roomName = 'room1'
     await roomSet.joinRoom('a', roomName)
     await roomSet.joinRoom('b', roomName)
