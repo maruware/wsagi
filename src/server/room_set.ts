@@ -1,27 +1,35 @@
-export class RoomSet {
-  rooms: Map<string, Set<string>>
+import Redis from 'ioredis'
 
-  constructor() {
-    this.rooms = new Map()
+const KEY_BASE = 'wsagi::room::'
+
+export class RoomSet {
+  redis: Redis.Redis
+
+  constructor(options?: Redis.RedisOptions) {
+    this.redis = new Redis(options)
   }
 
   joinRoom(id: string, roomName: string) {
-    if (!this.rooms.has(roomName)) {
-      this.rooms.set(roomName, new Set())
-    }
-
-    this.rooms.get(roomName).add(id)
+    const key = this.getRoomKey(roomName)
+    this.redis.sadd(key, id)
   }
 
   leaveRoom(id: string, roomName: string) {
-    this.rooms.get(roomName).delete(id)
+    const key = this.getRoomKey(roomName)
+    this.redis.srem(key, id)
   }
 
-  getRoomMembers(roomName: string) {
-    if (this.rooms.has(roomName)) {
-      return this.rooms.get(roomName).values()
-    } else {
-      return null
-    }
+  async getRoomMembers(roomName: string) {
+    const key = this.getRoomKey(roomName)
+    const members = (await this.redis.smembers(key)) as string[]
+    return members
+  }
+
+  close() {
+    this.redis.disconnect()
+  }
+
+  private getRoomKey(name: string) {
+    return KEY_BASE + name
   }
 }

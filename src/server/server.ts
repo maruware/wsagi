@@ -54,7 +54,7 @@ export class WsagiServer extends EventEmitter2 {
     this.wss.on('connection', this.handleConnection)
 
     this.listenEventSet = new ListenEventSet()
-    this.rooms = new RoomSet()
+    this.rooms = new RoomSet(options.redis)
   }
 
   private handleConnection(ws: WebSocket) {
@@ -111,22 +111,22 @@ export class WsagiServer extends EventEmitter2 {
     })
   }
 
-  sendRoom(roomName: string, event: string, data: any) {
-    const itr = this.rooms.getRoomMembers(roomName)
-    if (!itr) {
-      logger.warn(`No existing room ${roomName}`)
-      return Promise.resolve()
-    }
-    return mapIterateAll(itr, async id => {
-      if (this.listenEventSet.hasListenEvent(id, event)) {
-        await this.send(id, event, data)
-      }
-    })
+  async sendRoom(roomName: string, event: string, data: any) {
+    const members = await this.rooms.getRoomMembers(roomName)
+
+    return Promise.all(
+      members.map(m => {
+        if (this.listenEventSet.hasListenEvent(m, event)) {
+          return this.send(m, event, data)
+        }
+        return Promise.resolve()
+      })
+    )
   }
 
   async close(): Promise<void> {
     await this.messageManager.close()
-
+    await this.rooms.close()
     await new Promise((resolve, reject) => {
       this.wss.close(err => (err ? reject(err) : resolve()))
     })
