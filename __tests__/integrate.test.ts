@@ -37,25 +37,15 @@ describe('integrate test', () => {
 
     await delay(10)
 
-    // send one
-    const ids = await server.getAllClientIds()
-    const id = ids[0]
-    let data = { val: 1 }
-    await server.send(id, event1, data)
-
-    await delay(100)
-    expect(received.mock.calls.length).toBe(1)
-    expect(received.mock.calls[0][0]).toEqual(data)
-
     // room
-    data = { val: 2 }
+    let data = { val: 2 }
 
     server.sendRoom(roomName, event2, data)
 
     await delay(100)
 
-    expect(received.mock.calls.length).toBe(2)
-    expect(received.mock.calls[1][0]).toEqual(data)
+    expect(received.mock.calls.length).toBe(1)
+    expect(received.mock.calls[0][0]).toEqual(data)
 
     // broadcast
     data = { val: 3 }
@@ -63,8 +53,8 @@ describe('integrate test', () => {
 
     await delay(100)
 
-    expect(received.mock.calls.length).toBe(3)
-    expect(received.mock.calls[2][0]).toEqual(data)
+    expect(received.mock.calls.length).toBe(2)
+    expect(received.mock.calls[1][0]).toEqual(data)
 
     const cnt = await server.remainingSendingCount()
     expect(cnt).toBe(0)

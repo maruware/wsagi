@@ -154,10 +154,6 @@ export class WsagiServer extends EventEmitter {
     this.roomStore.joinRoom(id, roomName)
   }
 
-  getAllClientIds() {
-    return this.connStore.allIds()
-  }
-
   private sendProc(msgId: string, clientId: string, event: string, data: any) {
     const msg: RequestMessage = {
       kind: MessageKind.Request,
