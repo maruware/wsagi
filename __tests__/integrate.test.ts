@@ -136,4 +136,38 @@ describe('integrate test', () => {
     await server1.close()
     await server2.close()
   })
+
+  it('client -> server', async () => {
+    const port = 9998
+    const server = new WsagiServer({
+      port,
+      redis: { host: process.env.REDIS_HOST }
+    })
+    await server.clearAll()
+
+    const event1 = 'event1'
+    const received = jest.fn()
+    server.on('connection', conn => {
+      conn.on(event1, received)
+    })
+
+    const client = new WsagiClient(`ws://localhost:${port}/`)
+    const connected = jest.fn()
+    client.on('open', connected)
+
+    await client.waitReady()
+
+    const data = { val: 1 }
+    await client.send(event1, data)
+
+    await delay(50)
+
+    expect(received.mock.calls.length).toBe(1)
+    expect(received.mock.calls[0][0]).toEqual(data)
+
+    client.close()
+
+    await delay(10)
+    await server.close()
+  })
 })
