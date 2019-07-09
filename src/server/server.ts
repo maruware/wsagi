@@ -1,13 +1,13 @@
 import WebSocket from 'ws'
 import {
-  decodeMessage,
   encodeMessage,
   MessageKind,
   RequestMessage,
   ResponseMessage,
   ListenEventMessage
 } from '../common/message'
-import { EventEmitter2 } from 'eventemitter2'
+import { EventEmitter } from 'events'
+
 import { ConnectionStore } from './connection_store'
 import Redis from 'ioredis'
 import { logger } from '../logger'
@@ -18,6 +18,7 @@ import https from 'https'
 import _ from 'lodash'
 import { BackoffOptions, MessageManager } from './message_manager'
 import { all } from '@maruware/promise-tools'
+import { Conneciton } from './conneciton'
 
 interface WsagiServerOptions {
   host?: string
@@ -29,7 +30,12 @@ interface WsagiServerOptions {
   backoff?: number | BackoffOptions
 }
 
-export class WsagiServer extends EventEmitter2 {
+export declare interface WsagiServer {
+  on(event: 'connection', listener: (conn: Conneciton) => void): this
+  on(event: string, listener: Function): this
+}
+
+export class WsagiServer extends EventEmitter {
   instance: WebSocket.Server
   connStore: ConnectionStore
   listenEventStore: ListenEventStore
@@ -39,19 +45,20 @@ export class WsagiServer extends EventEmitter2 {
   constructor(options: WsagiServerOptions) {
     super()
 
+    this.sendProc = this.sendProc.bind(this)
+    this.handleConnection = this.handleConnection.bind(this)
+    this.handleResponse = this.handleResponse.bind(this)
+
     // socket
     this.instance = new WebSocket.Server(
       _.pick(options, ['host', 'port', 'server'])
     )
     this.connStore = new ConnectionStore(options.redis)
 
-    this.sendProc = this.sendProc.bind(this)
     this.messageManager = new MessageManager(
       this.sendProc,
       _.pick(options, ['attempts', 'backoff', 'redis'])
     )
-
-    this.handleConnection = this.handleConnection.bind(this)
 
     this.instance.on('connection', this.handleConnection)
 
@@ -60,41 +67,23 @@ export class WsagiServer extends EventEmitter2 {
   }
 
   private handleConnection(ws: WebSocket) {
-    const id = this.connStore.add(ws)
-    ws.on('message', message => {
-      this.handleMessage(id, message)
+    const conn = this.connStore.add(ws)
+
+    conn.on('close', async () => {
+      this.connStore.remove(conn.id)
+      await this.roomStore.leaveAllRooms(conn.id)
+      await this.listenEventStore.removeAll(conn.id)
     })
-    ws.on('close', async () => {
-      this.connStore.remove(id)
-      await this.roomStore.leaveAllRooms(id)
-      await this.listenEventStore.removeAll(id)
+    conn.on('__response__', this.handleResponse)
+    conn.on('__receive_listen_event__', msg => {
+      this.handleListenEvent(conn.id, msg)
     })
 
-    this.emit('connection', id)
-  }
-
-  private handleMessage(clientId: string, data: WebSocket.Data) {
-    const msg = decodeMessage(data)
-    switch (msg.kind) {
-      case MessageKind.Response:
-        return this.handleResponse(msg as ResponseMessage)
-      case MessageKind.Request:
-        return this.handleRequest(msg as RequestMessage)
-      case MessageKind.ListenEvent:
-        return this.handleListenEvent(clientId, msg as ListenEventMessage)
-
-      default:
-        logger.error(`Unknown message kind ${msg.kind}`)
-        return Promise.resolve()
-    }
+    this.emit('connection', conn)
   }
 
   private handleResponse(msg: ResponseMessage) {
     return this.messageManager.acknowledged(msg.reqId)
-  }
-
-  private handleRequest(msg: RequestMessage) {
-    this.emit(msg.event, msg.data)
   }
 
   private handleListenEvent(clientId: string, msg: ListenEventMessage) {
@@ -102,7 +91,7 @@ export class WsagiServer extends EventEmitter2 {
   }
 
   async send(clientId: string, event: string, data: any) {
-    logger.info(`send(queuing) ${event} -> ${clientId}`)
+    logger.info(`send(queueing) ${event} -> ${clientId}`)
 
     await this.messageManager.registMessage(clientId, event, data)
   }

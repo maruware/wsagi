@@ -13,6 +13,11 @@ describe('integrate test', () => {
     })
     await server.clearAll()
 
+    const roomName = 'test-room'
+    server.on('connection', conn => {
+      server.join(conn.id, roomName)
+    })
+
     const client = new WsagiClient(`ws://localhost:${port}/`)
     const connected = jest.fn()
     client.on('open', connected)
@@ -43,10 +48,8 @@ describe('integrate test', () => {
     expect(received.mock.calls[0][0]).toEqual(data)
 
     // room
-    const roomName = 'test-room'
     data = { val: 2 }
 
-    server.join(id, roomName)
     server.sendRoom(roomName, event2, data)
 
     await delay(100)

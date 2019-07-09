@@ -2,18 +2,19 @@ import WebSocket from 'ws'
 import uuid from 'uuid/v4'
 import { logger } from '../logger'
 import Redis from 'ioredis'
+import { Conneciton } from './conneciton'
 
 const CHANNEL = 'wsagi::conn'
 const ID_STORE_KEY = 'wsagi::conn::ids'
 
 export class ConnectionStore {
   idStore: Redis.Redis
-  connections: Map<string, WebSocket>
+  connections: Map<string, Conneciton>
   sub: Redis.Redis
   pub: Redis.Redis
 
   constructor(options?: Redis.RedisOptions) {
-    this.connections = new Map<string, WebSocket>()
+    this.connections = new Map<string, Conneciton>()
 
     this.idStore = new Redis(options)
     this.sub = new Redis(options)
@@ -35,12 +36,13 @@ export class ConnectionStore {
     }
   }
 
-  add(client: WebSocket) {
+  add(socket: WebSocket) {
     const id = this.generateId()
     this.idStore.sadd(ID_STORE_KEY, id)
-    this.connections.set(id, client)
+    const conn = new Conneciton(id, socket)
+    this.connections.set(id, conn)
 
-    return id
+    return conn
   }
 
   remove(id: string) {
@@ -73,13 +75,8 @@ export class ConnectionStore {
     if (!this.connections.has(id)) {
       throw new Error('Bad ID')
     }
-    const socket = this.connections.get(id)
-    return new Promise((resolve, reject) => {
-      logger.debug(`ws send ${data}`)
-      socket.send(data, err => {
-        err ? reject(err) : resolve()
-      })
-    })
+    const conn = this.connections.get(id)
+    return conn.send(data)
   }
 
   clear() {
