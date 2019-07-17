@@ -13,6 +13,12 @@ import { ulid } from 'ulid'
 import { defer, Deferred } from '@maruware/promise-tools'
 import { logger } from '../logger'
 
+export declare interface WsagiClient {
+  on(event: 'open', listener: () => void): this
+  on(event: 'close', listener: () => void): this
+  on(event: 'reconnect', listener: () => void): this
+  on(event: string, listener: Function): this
+}
 export class WsagiClient extends EventEmitter2 {
   address: string
   instance: WebSocket
@@ -118,12 +124,7 @@ export class WsagiClient extends EventEmitter2 {
 
   public on(event: string, listener: Listener): this {
     if (!['open', 'close', 'reconnect'].includes(event)) {
-      const msg: ListenEventMessage = {
-        event,
-        kind: MessageKind.ListenEvent
-      }
-      logger.debug('send listen event message [%s]', event)
-      this._send(msg)
+      this.sendListenEventMessage(event)
     }
 
     return super.on(event, listener)
@@ -151,6 +152,15 @@ export class WsagiClient extends EventEmitter2 {
         err ? reject(err) : resolve()
       })
     })
+  }
+  private async sendListenEventMessage(event: string) {
+    await this.deferredReady.promise
+    const msg: ListenEventMessage = {
+      event,
+      kind: MessageKind.ListenEvent
+    }
+    logger.debug('send listen event message [%s]', event)
+    this._send(msg)
   }
 
   private generateMessageId() {

@@ -17,9 +17,13 @@ const proc = async () => {
   })
 
   const asyncQuestion = (rl: readline.Interface, q: string) => {
-    return new Promise<string>(resolve => {
+    return new Promise<string>((resolve, reject) => {
       rl.question(q, answer => {
-        resolve(answer)
+        if (answer.length > 0) {
+          resolve(answer)
+        } else {
+          reject(new Error('no text'))
+        }
       })
     })
   }
@@ -34,6 +38,4 @@ const proc = async () => {
   await waitMessage(rl)
 }
 
-client.on('open', () => {
-  proc()
-})
+proc()
