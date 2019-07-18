@@ -123,6 +123,8 @@ describe('integrate test', () => {
     const received = jest.fn()
     client.on(event, received)
 
+    await delay(10)
+
     const data = { val: 1 }
     await server2.broadcast(event, data)
 
