@@ -43,7 +43,7 @@
     "typescript": "^3.4.5"
   },
   "dependencies": {
-    "@maruware/promise-tools": "^0.3.2",
+    "@maruware/promise-tools": "^0.3.4",
     "bull": "^3.9.1",
     "eventemitter2": "^5.0.1",
     "ioredis": "^4.9.5",

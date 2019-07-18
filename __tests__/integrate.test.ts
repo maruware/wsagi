@@ -6,7 +6,7 @@ import { delay } from '@maruware/promise-tools'
 
 describe('integrate test', () => {
   it('server -> client', async () => {
-    const port = 9998
+    const port = 9000
     const server = new WsagiServer({
       port,
       redis: { host: process.env.REDIS_HOST }
@@ -66,14 +66,16 @@ describe('integrate test', () => {
   })
 
   it('reconnect', async () => {
-    const port = 9995
+    const port = 9001
     let server = new WsagiServer({
       port,
       redis: { host: process.env.REDIS_HOST }
     })
     await server.clearAll()
 
-    const client = new WsagiClient(`ws://localhost:${port}/`, 20)
+    const client = new WsagiClient(`ws://localhost:${port}/`, {
+      autoReconnectInterval: 20
+    })
     const connected = jest.fn()
     client.on('open', connected)
     const reconnected = jest.fn()
@@ -103,14 +105,14 @@ describe('integrate test', () => {
   })
 
   it('multi instances', async () => {
-    const port1 = 9997
+    const port1 = 9002
     const server1 = new WsagiServer({
       port: port1,
       redis: { host: process.env.REDIS_HOST }
     })
     await server1.clearAll()
 
-    const port2 = 9998
+    const port2 = 9003
     const server2 = new WsagiServer({
       port: port2,
       redis: { host: process.env.REDIS_HOST }
@@ -140,7 +142,7 @@ describe('integrate test', () => {
   })
 
   it('client -> server', async () => {
-    const port = 9998
+    const port = 9004
     const server = new WsagiServer({
       port,
       redis: { host: process.env.REDIS_HOST }

@@ -142,7 +142,7 @@ export class WsagiServer extends EventEmitter {
   }
 
   clearAll() {
-    return all(
+    return all<any>(
       this.listenEventStore.clear(),
       this.connStore.clear(),
       this.roomStore.clear(),

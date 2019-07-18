@@ -19,17 +19,35 @@ export declare interface WsagiClient {
   on(event: 'reconnect', listener: () => void): this
   on(event: string, listener: Function): this
 }
+
+interface Headers {
+  [key: string]: string
+}
+
+export interface WsagiClientOptions {
+  headers?: Headers
+  autoReconnectInterval?: number
+}
+
 export class WsagiClient extends EventEmitter2 {
   address: string
   instance: WebSocket
-  autoReconnectInterval: number
   deferredReady: Deferred<void>
   lastReceivedMessageId: string
 
-  constructor(address: string, autoReconnectInterval: number = 5000) {
+  autoReconnectInterval: number
+  headers: Headers
+
+  constructor(address: string, options?: WsagiClientOptions) {
     super()
     this.address = address
-    this.autoReconnectInterval = autoReconnectInterval
+    this.autoReconnectInterval = 5000
+    if (options && options.autoReconnectInterval) {
+      this.autoReconnectInterval = options.autoReconnectInterval
+    }
+    if (options && options.headers) {
+      this.headers = options.headers
+    }
 
     this.lastReceivedMessageId = ''
 
@@ -42,7 +60,11 @@ export class WsagiClient extends EventEmitter2 {
 
   private open() {
     this.deferredReady = defer<void>()
-    this.instance = new WebSocket(this.address)
+    const options: WebSocket.ClientOptions = {}
+    if (this.headers) {
+      options.headers = this.headers
+    }
+    this.instance = new WebSocket(this.address, options)
 
     this.instance.on('open', this.handleOpen)
     this.instance.on('close', this.handleClose)
